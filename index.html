@@ -57,7 +57,7 @@
           A small Node.js CLI that checks whether your lockfiles, package manifests, CI install commands, and Dockerfiles can produce a frozen, repeatable install.
         </p>
         <div class="meta">
-          <span class="chip"><em>v0.1.0</em></span>
+          <span class="chip"><em>v0.2.0</em></span>
           <span class="chip">Node <em>18+</em></span>
           <span class="chip">Runtime deps <em>0</em></span>
           <span class="chip">License <em>MIT</em></span>
@@ -65,7 +65,7 @@
         </div>
         <p class="note">
           LockGate is a local CLI you run against a checkout. It is a consistency gate, not a reimplementation of <code>npm ci</code> and not a guarantee that production installs the committed tree.
-          The 0.1.0 source + CLI bundle is MIT licensed. Checkout is not live. This site is a public pre-launch draft and is not indexed.
+          The 0.2.0 source + CLI bundle is MIT licensed. Checkout is not live. This site is a public pre-launch draft and is not indexed.
         </p>
       </div>
 
@@ -115,7 +115,7 @@
             <li>Mixed package-manager lockfiles in the same directory (npm shrinkwrap plus <code>package-lock.json</code> is valid, not mixed)</li>
             <li>A missing lockfile, or one listed in <code>.gitignore</code> / <code>.dockerignore</code>. If the lockfile is gitignored, that is treated as a library policy: a warning, not a failure</li>
             <li>A Corepack <code>packageManager</code> field that does not match the lockfile in scope</li>
-            <li>npm <code>package-lock.json</code> / <code>npm-shrinkwrap.json</code> compared to direct dependencies</li>
+            <li>Direct dependencies in each <code>package.json</code>, including workspaces, compared to npm, Yarn classic, Yarn Berry, pnpm v6/v9, and text <code>bun.lock</code></li>
             <li>GitHub Actions <code>run:</code> steps that invoke <code>npm install</code> instead of <code>npm ci</code>, or Yarn / bun without a frozen flag</li>
             <li>Dockerfiles that <code>RUN npm install</code> or copy <code>package.json</code> without the lockfile</li>
             <li><code>--json</code>, <code>--ignore</code>, <code>--root</code>, <code>--allow-mixed</code>, <code>--lockfile-policy</code>, <code>--include-fixtures</code></li>
@@ -126,7 +126,7 @@
           <h2>What it is not</h2>
           <ul>
             <li>Not a reimplementation of npm's arborist or a full <code>npm ci</code> ideal-tree check</li>
-            <li>Yarn, pnpm, and bun lockfiles are detected, not fully parsed for manifest sync in 0.1.0</li>
+            <li>Not a reimplementation of Yarn, pnpm, or bun install. Binary <code>bun.lockb</code> is not parsed for sync. pnpm lockfile versions other than 6 and 9 are skipped</li>
             <li>Not a full YAML or Dockerfile parser</li>
             <li>Does not call the network or install packages</li>
             <li>Lite (the GitHub Action) does not check npm sync or Dockerfiles. It does read <code>.gitignore</code> to detect a library lockfile policy</li>
@@ -136,7 +136,7 @@
 
       <section id="lite">
         <h2>Lite vs the full CLI</h2>
-        <p>LockGate Lite is a free GitHub Action that checks mixed or missing lockfiles, <code>packageManager</code> mismatches, and unfrozen CI installs. Use it as <code>ESS2292/lockgate-action@v1</code>. If a lockfile name is gitignored, Lite treats that as a common library policy: it warns instead of failing, and does not flag <code>npm install</code> in CI (a library that does not commit a lockfile cannot run <code>npm ci</code>). Manifests under <code>tests/fixtures</code>-style paths are skipped by default. The $19 CLI adds npm manifest-vs-lockfile sync, Dockerfile <code>COPY</code> / <code>RUN</code> checks, a JSON report, and a command you can run on a laptop or in any CI. Checkout is not live.</p>
+        <p>LockGate Lite is a free GitHub Action that checks mixed or missing lockfiles, <code>packageManager</code> mismatches, and unfrozen CI installs. Use it as <code>ESS2292/lockgate-action@v1</code>. If a lockfile name is gitignored, Lite treats that as a common library policy: it warns instead of failing, and does not flag <code>npm install</code> in CI (a library that does not commit a lockfile cannot run <code>npm ci</code>). Manifests under <code>tests/fixtures</code>-style paths are skipped by default. The $19 CLI adds manifest-vs-lockfile sync for npm, Yarn classic, Yarn Berry, pnpm v6/v9, and text <code>bun.lock</code> (including workspaces), Dockerfile <code>COPY</code> / <code>RUN</code> checks, a JSON report, and a command you can run on a laptop or in any CI. Checkout is not live.</p>
         <p><a class="cta-link" href="https://github.com/ESS2292/lockgate-action">Open the LockGate Lite Action &rarr;</a></p>
         <div class="terminal">
           <div class="bar">
@@ -187,8 +187,8 @@ jobs:
       <section id="limits">
         <h2>Honest limits</h2>
         <ul>
-          <li>npm comparison is direct dependencies only. <code>peerDependencies</code> are not required to appear as installed lockfile entries.</li>
-          <li>Yarn, pnpm, and bun lockfiles are detected and checked for mixed, missing, and install-command issues; their bytes are not fully parsed for sync in 0.1.0. Use the official frozen install as the sync check for those managers.</li>
+          <li>Manifest sync is direct dependencies only, including workspaces. It is not a reimplementation of npm's arborist, Yarn, or pnpm install. <code>peerDependencies</code> are not required to appear as installed lockfile entries.</li>
+          <li>Hand-written parsers cover Yarn classic v1, Yarn Berry, pnpm lockfile v6 and v9, and text <code>bun.lock</code>. Binary <code>bun.lockb</code> is not parsed for sync. pnpm lockfile versions other than 6 and 9 are skipped with a warning. Special ranges such as <code>catalog:</code>, <code>workspace:</code>, and <code>git:</code> are not guessed at.</li>
           <li>Workflow and Dockerfile parsing is best-effort, not a complete YAML or Dockerfile implementation. <code>ARG</code> / <code>--from</code> / heredoc <code>RUN</code> are not fully expanded.</li>
           <li>pnpm's default <code>--frozen-lockfile</code> in CI is respected: a bare <code>pnpm install</code> in GitHub Actions is a warning, because GitHub sets <code>CI=true</code>. Docker is not assumed to be CI.</li>
           <li>Bare <code>yarn install</code> is a warning when the repo's <code>yarn.lock</code> is Yarn Berry (immutable on CI by default) and an error on Yarn 1, which does not have that default.</li>
@@ -223,7 +223,7 @@ jobs:
         </details>
         <details>
           <summary>Does Lite check npm sync or Dockerfiles?</summary>
-          <p>No. LockGate Lite checks mixed or missing lockfiles, <code>packageManager</code> mismatches, and unfrozen CI installs only. It reads <code>.gitignore</code> only to detect a library lockfile policy. npm manifest-vs-lockfile sync and Dockerfile <code>COPY</code> / <code>RUN</code> checks are in the full CLI. Checkout is not live.</p>
+          <p>No. LockGate Lite checks mixed or missing lockfiles, <code>packageManager</code> mismatches, and unfrozen CI installs only. It reads <code>.gitignore</code> only to detect a library lockfile policy. Manifest-vs-lockfile sync (npm, Yarn, pnpm, and text bun.lock) and Dockerfile <code>COPY</code> / <code>RUN</code> checks are in the full CLI. Checkout is not live.</p>
         </details>
         <details>
           <summary>Where is the free GitHub Action?</summary>
@@ -245,7 +245,7 @@ jobs:
       </nav>
 <div class="footer-row">
         <div>
-          LockGate 0.1.0 by Emilio Straubel · $19 one-time · MIT source included · pre-launch site, not indexed, no tracking
+          LockGate 0.2.0 by Emilio Straubel · $19 one-time · MIT source included · pre-launch site, not indexed, no tracking
         </div>
         <div class="footer-links">
           <a href="index.html">Home</a>
