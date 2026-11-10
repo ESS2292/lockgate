@@ -40,6 +40,7 @@
       </a>
       <ul class="nav-links">
         <li><a href="#checks">What it checks</a></li>
+        <li><a href="#demo">Demo</a></li>
         <li><a href="#ci">CI</a></li>
         <li><a href="#limits">Limits</a></li>
         <li><a href="#pricing">Pricing</a></li>
@@ -151,6 +152,50 @@
 
       </section>
 
+      <section id="demo">
+        <h2>Real demo output</h2>
+        <p class="note">These are recorded runs against the package examples. Fixtures are synthetic. The output is from the real LockGate 0.2.1 CLI, including exit codes.</p>
+
+        <figure class="demo-rec">
+          <video autoplay loop muted playsinline controls poster="demos/lockgate-demo.gif" width="960" height="540">
+            <source src="demos/lockgate-demo.mp4" type="video/mp4" />
+            <img src="demos/lockgate-demo.gif" width="960" height="540" alt="Terminal recording: LockGate passes on a clean frozen install, then fails on mixed lockfiles, an out-of-sync manifest, and unfrozen npm install in CI and Docker." />
+          </video>
+          <figcaption>LockGate on the package examples: a frozen install exits 0; mixed lockfiles and unfrozen installs exit 1. Recorded from the real 0.2.1 CLI. The # exit lines are the process exit codes, not CLI output.</figcaption>
+        </figure>
+
+        <div class="grid-2">
+          <div class="terminal">
+            <div class="bar">
+              <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+              <span class="bar-cmd">node bin/lockgate.js check examples/clean</span>
+            </div>
+<pre><span class="c-accent">LockGate checked 1 package.json file and 1 lockfile.</span>
+<span class="c-ok">OK — lockfiles and install commands look frozen.</span>
+<span class="c-ok"># exit 0</span>
+</pre>
+          </div>
+
+          <div class="terminal">
+            <div class="bar">
+              <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+              <span class="bar-cmd">node bin/lockgate.js check examples/drift</span>
+            </div>
+<pre><span class="c-accent">LockGate checked 1 package.json file and 2 lockfiles.</span>
+
+<span class="c-err">Errors (6):</span>
+<span class="c-err">  [mixed-lockfiles] . has lockfiles from more than one package manager (package-lock.json and yarn.lock). Teams that mix them get different trees depending on who installs.</span>
+<span class="c-err">  [lockfile-out-of-sync] package.json declares debug@^4.3.4, but package-lock.json has no entry for it.</span>
+<span class="c-err">  [lockfile-out-of-sync] package.json declares debug@^4.3.4, but yarn.lock has no entry for it.</span>
+<span class="c-err">  [unfrozen-ci] .github/workflows/ci.yml:8 runs `npm install`, which can update the lockfile or resolve a different tree. Use npm ci.</span>
+<span class="c-err">  [unfrozen-docker] Dockerfile runs `npm install`. Use npm ci so the image installs the committed tree.</span>
+<span class="c-err">  [docker-missing-lockfile] Dockerfile installs with npm but does not COPY a npm lockfile before the install.</span>
+<span class="c-err"># exit 1</span>
+</pre>
+          </div>
+        </div>
+      </section>
+
       <section id="ci">
         <h2>CI sketch</h2>
         <p class="note">From the bundled workflow sketch. Prefer <code>npm ci</code> (or the equivalent frozen install for Yarn, pnpm, or bun) so CI cannot rewrite the lockfile.</p>
@@ -242,6 +287,7 @@ jobs:
           <a href="https://ess2292.github.io/envgate/">EnvGate</a>
           <a href="https://ess2292.github.io/runtimegate/">RuntimeGate</a>
           <a href="https://ess2292.github.io/lockgate/" aria-current="page">LockGate</a>
+          <a href="https://ess2292.github.io/servicegate/">ServiceGate</a>
       </nav>
 <div class="footer-row">
         <div>

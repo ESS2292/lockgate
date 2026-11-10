@@ -1,0 +1,3 @@
+LockGate checked 1 package.json file and 1 lockfile.
+OK — lockfiles and install commands look frozen.
+# exit 0

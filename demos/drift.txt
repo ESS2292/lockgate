@@ -1,0 +1,10 @@
+LockGate checked 1 package.json file and 2 lockfiles.
+
+Errors (6):
+  [mixed-lockfiles] . has lockfiles from more than one package manager (package-lock.json and yarn.lock). Teams that mix them get different trees depending on who installs.
+  [lockfile-out-of-sync] package.json declares debug@^4.3.4, but package-lock.json has no entry for it.
+  [lockfile-out-of-sync] package.json declares debug@^4.3.4, but yarn.lock has no entry for it.
+  [unfrozen-ci] .github/workflows/ci.yml:8 runs `npm install`, which can update the lockfile or resolve a different tree. Use npm ci.
+  [unfrozen-docker] Dockerfile runs `npm install`. Use npm ci so the image installs the committed tree.
+  [docker-missing-lockfile] Dockerfile installs with npm but does not COPY a npm lockfile before the install.
+# exit 1
