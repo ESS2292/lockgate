@@ -1,0 +1,6 @@
+# Launch-ready robots.txt for LockGate.
+# At launch: replace robots.txt with this file AND remove <meta name="robots" content="noindex"> from every page.
+User-agent: *
+Allow: /
+
+Sitemap: https://ess2292.github.io/lockgate/sitemap.xml

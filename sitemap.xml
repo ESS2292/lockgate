@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Prepared for launch. Not referenced by the live robots.txt yet; robots.launch.txt points here. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://ess2292.github.io/lockgate/</loc><lastmod>2026-11-10</lastmod></url>
+  <url><loc>https://ess2292.github.io/lockgate/privacy.html</loc><lastmod>2026-11-10</lastmod></url>
+  <url><loc>https://ess2292.github.io/lockgate/terms.html</loc><lastmod>2026-11-10</lastmod></url>
+  <url><loc>https://ess2292.github.io/lockgate/guides/</loc><lastmod>2026-11-10</lastmod></url>
+  <url><loc>https://ess2292.github.io/lockgate/guides/npm-ci-lockfile-out-of-sync.html</loc><lastmod>2026-11-10</lastmod></url>
+  <url><loc>https://ess2292.github.io/lockgate/guides/pnpm-lock-and-package-lock-both-committed.html</loc><lastmod>2026-11-10</lastmod></url>
+  <url><loc>https://ess2292.github.io/lockgate/guides/docker-copy-package-lock-npm-ci.html</loc><lastmod>2026-11-10</lastmod></url>
+</urlset>

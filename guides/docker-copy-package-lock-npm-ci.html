@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Copy the lockfile and run npm ci in Docker — LockGate Guides</title>
+  <meta name="description" content="Why COPY package.json followed by RUN npm install is not a frozen image build, and what the official Node.js Docker examples do instead." />
+  <meta name="author" content="Emilio Straubel" />
+  <meta name="robots" content="noindex" />
+  <meta property="og:title" content="Copy the lockfile and run npm ci in Docker — LockGate Guides" />
+  <meta property="og:description" content="Why COPY package.json followed by RUN npm install is not a frozen image build, and what the official Node.js Docker examples do instead." />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="LockGate" />
+  <meta property="og:url" content="https://ess2292.github.io/lockgate/guides/docker-copy-package-lock-npm-ci.html" />
+  <link rel="canonical" href="https://ess2292.github.io/lockgate/guides/docker-copy-package-lock-npm-ci.html" />
+  <meta property="og:image" content="https://ess2292.github.io/lockgate/og-image.svg" />
+  <meta property="article:published_time" content="2026-11-10" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Copy the lockfile and run npm ci in Docker — LockGate Guides" />
+  <meta name="twitter:description" content="Why COPY package.json followed by RUN npm install is not a frozen image build, and what the official Node.js Docker examples do instead." />
+  <meta name="twitter:image" content="https://ess2292.github.io/lockgate/og-image.svg" />
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "TechArticle", "headline": "Copy the lockfile and run npm ci in Docker", "description": "Why COPY package.json followed by RUN npm install is not a frozen image build, and what the official Node.js Docker examples do instead.", "author": {"@type": "Person", "name": "Emilio Straubel"}, "datePublished": "2026-11-10", "dateModified": "2026-11-10", "mainEntityOfPage": "https://ess2292.github.io/lockgate/guides/docker-copy-package-lock-npm-ci.html", "publisher": {"@type": "Person", "name": "Emilio Straubel"}, "image": "https://ess2292.github.io/lockgate/og-image.svg"}</script>
+  <link rel="stylesheet" href="../styles.css" />
+  <link rel="icon" href="../og-image.svg" type="image/svg+xml" />
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="wrap">
+    <nav class="site-nav" aria-label="Primary">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">lg</span>
+        LockGate
+      </a>
+      <ul class="nav-links">
+        <li><a href="../index.html#checks">What it checks</a></li>
+        <li><a href="../index.html#pricing">Pricing</a></li>
+        <li><a href="index.html" aria-current="page">Guides</a></li>
+        <li><a href="../index.html#faq">FAQ</a></li>
+        <li><a href="https://github.com/ESS2292/lockgate-action">Lite Action</a></li>
+      </ul>
+    </nav>
+    <main id="main" class="article">
+      <p class="crumbs"><a href="../index.html">LockGate</a> / <a href="index.html">Guides</a></p>
+      <section>
+        <div class="eyebrow">Guide &middot; November 10, 2026</div>
+        <h1>Copy the lockfile and run npm ci in Docker</h1>
+        <p class="lead"><code>COPY package.json .</code> followed by <code>RUN npm install</code> builds an image from ranges, not from the committed lockfile. The official Node.js Docker examples do not do that.</p>
+        <p>A Dockerfile that copies only <code>package.json</code> cannot run a frozen install: <code>npm ci</code> requires the lockfile, and <code>npm install</code> without it will resolve a new tree and, if the lockfile later appears, may rewrite it. Listing the lockfile in <code>.dockerignore</code> has the same effect, even when you write <code>COPY . .</code> or <code>COPY package*.json ./</code>.</p>
+        <p>The Stack Overflow thread <a href="https://stackoverflow.com/questions/65234362/should-i-copy-package-lock-json-to-the-container-image-in-dockerfile">Should I copy package-lock.json to the container image in Dockerfile?</a> has a score of 22 and 18,294 views (Stack Exchange API, 10 November 2026). The accepted answer (score 38) says to copy the lockfile and use <code>npm ci</code>.</p>
+        <p>That is also what the official image documentation recommends. The Node.js Docker official-image <a href="https://github.com/nodejs/docker-node/blob/main/docs/BestPractices.md">BestPractices.md</a> (fetched 10 November 2026) uses this pattern in both the Alpine and Debian examples:</p>
+        <pre><code>COPY package*.json ./
+RUN npm ci</code></pre>
+        <p>The <code>package*.json</code> glob copies both <code>package.json</code> and <code>package-lock.json</code>. After the install, you can copy the rest of the application. The install layer then only invalidates when the manifest or the lockfile changes.</p>
+        <h2>Do not rely on CI defaults inside an image</h2>
+        <p>pnpm and Yarn Berry freeze by default when <code>CI=true</code>. GitHub Actions sets that variable; a Docker build often does not. A bare <code>pnpm install</code> or <code>yarn install</code> in a <code>RUN</code> line can therefore rewrite the lockfile during the image build even if the same command would freeze in CI. Prefer an explicit flag: <code>npm ci</code>, <code>pnpm install --frozen-lockfile</code>, <code>yarn install --immutable</code> (or <code>--frozen-lockfile</code> on Yarn 1), or <code>bun ci</code>.</p>
+        <p>The free <a href="https://github.com/ESS2292/lockgate-action">LockGate Lite Action</a> does not read Dockerfiles. It will still catch an unfrozen <code>npm install</code> in a GitHub Actions workflow. Dockerfile <code>COPY</code> / <code>RUN</code> checks, including the official <code>package*.json</code> glob and lockfiles listed in <code>.dockerignore</code>, are in the full LockGate CLI. Checkout is not live.</p>
+      </section>
+      <section class="cta-box" aria-label="LockGate">
+        <h2>Want the check in CI?</h2>
+        <p>The free <a href="https://github.com/ESS2292/lockgate-action">LockGate Lite GitHub Action</a> checks mixed or missing lockfiles and unfrozen CI installs. The full <strong>LockGate CLI</strong> also compares npm manifests to lockfiles and reads Dockerfiles, with a JSON report, locally or in any CI. Checkout is not live.</p>
+        <p><strong>$19 one-time</strong> &middot; Node 18+ &middot; zero runtime dependencies &middot; MIT source included. Checkout is not live.</p>
+        <p><a class="cta-link" href="../index.html#pricing">See LockGate &rarr;</a></p>
+      </section>
+      <section>
+        <h2>Related guides</h2>
+        <ul>
+          <li><a href="npm-ci-lockfile-out-of-sync.html">Why npm ci fails when the lockfile is out of sync</a></li>
+          <li><a href="pnpm-lock-and-package-lock-both-committed.html">Don't commit pnpm-lock.yaml and package-lock.json together</a></li>
+        </ul>
+      </section>
+    </main>
+    <footer>
+      <div class="footer-row">
+        <div>LockGate 0.1.0 by Emilio Straubel · pre-launch pages, not indexed</div>
+        <div class="footer-links">
+          <a href="../index.html">Home</a>
+          <a href="index.html">Guides</a>
+          <a href="../privacy.html">Privacy</a>
+          <a href="../terms.html">Terms</a>
+          <a href="https://github.com/ESS2292/lockgate-action">Lite Action</a>
+          <a href="https://github.com/ESS2292/lockgate-action/issues">Issues</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
