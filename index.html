@@ -105,12 +105,12 @@
           <ul>
             <li><code>lockgate check</code> — primary command</li>
             <li>Mixed package-manager lockfiles in the same directory (npm shrinkwrap plus <code>package-lock.json</code> is valid, not mixed)</li>
-            <li>A missing lockfile, or one listed in <code>.gitignore</code> / <code>.dockerignore</code></li>
+            <li>A missing lockfile, or one listed in <code>.gitignore</code> / <code>.dockerignore</code>. If the lockfile is gitignored, that is treated as a library policy: a warning, not a failure</li>
             <li>A Corepack <code>packageManager</code> field that does not match the lockfile in scope</li>
             <li>npm <code>package-lock.json</code> / <code>npm-shrinkwrap.json</code> compared to direct dependencies</li>
             <li>GitHub Actions <code>run:</code> steps that invoke <code>npm install</code> instead of <code>npm ci</code>, or Yarn / bun without a frozen flag</li>
             <li>Dockerfiles that <code>RUN npm install</code> or copy <code>package.json</code> without the lockfile</li>
-            <li><code>--json</code>, <code>--ignore</code>, <code>--root</code>, <code>--allow-mixed</code></li>
+            <li><code>--json</code>, <code>--ignore</code>, <code>--root</code>, <code>--allow-mixed</code>, <code>--lockfile-policy</code>, <code>--include-fixtures</code></li>
             <li>Exit codes: <code>0</code> pass, <code>1</code> violations, <code>2</code> usage or missing root</li>
           </ul>
         </section>
@@ -121,14 +121,14 @@
             <li>Yarn, pnpm, and bun lockfiles are detected, not fully parsed for manifest sync in 0.1.0</li>
             <li>Not a full YAML or Dockerfile parser</li>
             <li>Does not call the network or install packages</li>
-            <li>Lite (the GitHub Action) does not check npm sync or Dockerfiles</li>
+            <li>Lite (the GitHub Action) does not check npm sync or Dockerfiles. It does read <code>.gitignore</code> to detect a library lockfile policy</li>
           </ul>
         </section>
       </div>
 
       <section id="lite">
         <h2>Lite vs the full CLI</h2>
-        <p>LockGate Lite is a free GitHub Action that checks mixed or missing lockfiles, <code>packageManager</code> mismatches, and unfrozen CI installs. Use it as <code>ESS2292/lockgate-action@v1</code>. The $19 CLI adds npm manifest-vs-lockfile sync, Dockerfile <code>COPY</code> / <code>RUN</code> checks, a JSON report, and a command you can run on a laptop or in any CI. Checkout is not live.</p>
+        <p>LockGate Lite is a free GitHub Action that checks mixed or missing lockfiles, <code>packageManager</code> mismatches, and unfrozen CI installs. Use it as <code>ESS2292/lockgate-action@v1</code>. If a lockfile name is gitignored, Lite treats that as a common library policy: it warns instead of failing, and does not flag <code>npm install</code> in CI (a library that does not commit a lockfile cannot run <code>npm ci</code>). Manifests under <code>tests/fixtures</code>-style paths are skipped by default. The $19 CLI adds npm manifest-vs-lockfile sync, Dockerfile <code>COPY</code> / <code>RUN</code> checks, a JSON report, and a command you can run on a laptop or in any CI. Checkout is not live.</p>
         <p><a class="cta-link" href="https://github.com/ESS2292/lockgate-action">Open the LockGate Lite Action &rarr;</a></p>
         <div class="terminal" aria-label="LockGate Lite GitHub Action example">
           <div class="bar">
@@ -184,6 +184,7 @@ jobs:
           <li>Workflow and Dockerfile parsing is best-effort, not a complete YAML or Dockerfile implementation. <code>ARG</code> / <code>--from</code> / heredoc <code>RUN</code> are not fully expanded.</li>
           <li>pnpm's default <code>--frozen-lockfile</code> in CI is respected: a bare <code>pnpm install</code> in GitHub Actions is a warning, because GitHub sets <code>CI=true</code>. Docker is not assumed to be CI.</li>
           <li>Bare <code>yarn install</code> is a warning when the repo's <code>yarn.lock</code> is Yarn Berry (immutable on CI by default) and an error on Yarn 1, which does not have that default.</li>
+          <li>A gitignored lockfile is treated as an intentional library policy by default (<code>lockfile-policy: auto</code>). Warnings stay visible and do not fail the check. Set <code>lockfile-policy: app</code> (or <code>--lockfile-policy app</code> on the CLI) if the ignore was a mistake, or <code>library</code> to force the policy without a gitignore.</li>
         </ul>
       </section>
 
@@ -209,8 +210,12 @@ jobs:
           <p>MIT allows selling copies. The price is for a packaged, tested release with docs and a CI sketch, not exclusive ownership of the code. Buyers (and others) may redistribute under MIT terms.</p>
         </details>
         <details>
+          <summary>What about libraries that gitignore their lockfiles?</summary>
+          <p>That is treated as an intentional policy. Libraries such as ESLint and Express gitignore <code>package-lock.json</code> (and often <code>yarn.lock</code>) because consumers resolve their own tree. Lite and the CLI then report a missing lockfile as a warning, not a failure, and they do not flag <code>npm install</code> in CI. You can force the same policy with <code>lockfile-policy: library</code>, or keep strict app rules with <code>lockfile-policy: app</code>. Manifests under <code>tests/fixtures</code>-style paths are skipped by default.</p>
+        </details>
+        <details>
           <summary>Does Lite check npm sync or Dockerfiles?</summary>
-          <p>No. LockGate Lite checks mixed or missing lockfiles, <code>packageManager</code> mismatches, and unfrozen CI installs only. npm manifest-vs-lockfile sync and Dockerfile <code>COPY</code> / <code>RUN</code> checks are in the full CLI. Checkout is not live.</p>
+          <p>No. LockGate Lite checks mixed or missing lockfiles, <code>packageManager</code> mismatches, and unfrozen CI installs only. It reads <code>.gitignore</code> only to detect a library lockfile policy. npm manifest-vs-lockfile sync and Dockerfile <code>COPY</code> / <code>RUN</code> checks are in the full CLI. Checkout is not live.</p>
         </details>
         <details>
           <summary>Where is the free GitHub Action?</summary>
