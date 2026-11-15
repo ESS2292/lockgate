@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>pnpm install --frozen-lockfile in CI: ERR_PNPM_OUTDATED_LOCKFILE explained — LockGate Guides</title>
+  <meta name="description" content="Why pnpm install fails in CI with ERR_PNPM_OUTDATED_LOCKFILE, the exact output from pnpm 12, 10, and 9, how the CI default differs from local installs, and how to pin pnpm and order COPY in a Dockerfile." />
+  <meta name="author" content="Emilio Straubel" />
+  <meta name="robots" content="noindex" />
+  <meta property="og:title" content="pnpm install --frozen-lockfile in CI: ERR_PNPM_OUTDATED_LOCKFILE explained — LockGate Guides" />
+  <meta property="og:description" content="Why pnpm install fails in CI with ERR_PNPM_OUTDATED_LOCKFILE, the exact output from pnpm 12, 10, and 9, how the CI default differs from local installs, and how to pin pnpm and order COPY in a Dockerfile." />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="LockGate" />
+  <meta property="og:url" content="https://ess2292.github.io/lockgate/guides/pnpm-frozen-lockfile-ci.html" />
+  <link rel="canonical" href="https://ess2292.github.io/lockgate/guides/pnpm-frozen-lockfile-ci.html" />
+  <meta property="og:image" content="https://ess2292.github.io/lockgate/og-image.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="LockGate — fail CI when the lockfile and the install disagree" />
+  <meta property="article:published_time" content="2026-11-15" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="pnpm install --frozen-lockfile in CI: ERR_PNPM_OUTDATED_LOCKFILE explained — LockGate Guides" />
+  <meta name="twitter:description" content="Why pnpm install fails in CI with ERR_PNPM_OUTDATED_LOCKFILE, the exact output from pnpm 12, 10, and 9, how the CI default differs from local installs, and how to pin pnpm and order COPY in a Dockerfile." />
+  <meta name="twitter:image" content="https://ess2292.github.io/lockgate/og-image.png" />
+  <meta name="twitter:image:alt" content="LockGate — fail CI when the lockfile and the install disagree" />
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "TechArticle", "headline": "pnpm install --frozen-lockfile in CI: ERR_PNPM_OUTDATED_LOCKFILE explained", "description": "Why pnpm install fails in CI with ERR_PNPM_OUTDATED_LOCKFILE, the exact output from pnpm 12, 10, and 9, how the CI default differs from local installs, and how to pin pnpm and order COPY in a Dockerfile.", "author": {"@type": "Person", "name": "Emilio Straubel"}, "datePublished": "2026-11-15", "dateModified": "2026-11-15", "mainEntityOfPage": "https://ess2292.github.io/lockgate/guides/pnpm-frozen-lockfile-ci.html", "publisher": {"@type": "Person", "name": "Emilio Straubel"}, "image": "https://ess2292.github.io/lockgate/og-image.png"}</script>
+  <meta name="theme-color" content="#0b1220" />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="../favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="wrap">
+    <nav class="site-nav" aria-label="Primary">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">lg</span>
+        LockGate
+      </a>
+      <ul class="nav-links">
+        <li><a href="../index.html#checks">What it checks</a></li>
+        <li><a href="../index.html#ci">CI</a></li>
+        <li><a href="../index.html#limits">Limits</a></li>
+        <li><a href="../index.html#pricing">Pricing</a></li>
+        <li><a href="index.html" aria-current="page">Guides</a></li>
+        <li><a href="../index.html#faq">FAQ</a></li>
+        <li><a href="https://github.com/ESS2292/lockgate-action">Lite Action</a></li>
+      </ul>
+    </nav>
+    <main id="main" class="article">
+      <p class="crumbs"><a href="../index.html">LockGate</a> / <a href="index.html">Guides</a></p>
+      <section>
+        <div class="eyebrow">Guide &middot; November 15, 2026</div>
+        <h1>pnpm install --frozen-lockfile in CI: ERR_PNPM_OUTDATED_LOCKFILE explained</h1>
+        <p class="lead">Your branch passes locally and <code>pnpm install</code> fails in CI with <code>ERR_PNPM_OUTDATED_LOCKFILE</code>. That is pnpm doing its job: <code>package.json</code> changed and <code>pnpm-lock.yaml</code> was not regenerated and committed.</p>
+        <p>Everything below was run on 15 November 2026 with pnpm 12.21.0 (the current <code>latest</code> on npm), plus pnpm 10.34.9 and 9.15.9 for comparison, on Node.js 24.22.1. The test project had a committed <code>pnpm-lock.yaml</code> for <code>is-number@^7.0.0</code>, then gained <code>"left-pad": "^1.3.0"</code> in <code>package.json</code> without a lockfile update.</p>
+        <h2>The CI default: frozen-lockfile is on</h2>
+        <p>The <a href="https://pnpm.io/cli/install">pnpm install docs</a> list the <code>--frozen-lockfile</code> default as false for non-CI and &ldquo;true, if a lockfile is present&rdquo; for CI. With it on, pnpm &ldquo;doesn&rsquo;t generate a lockfile and fails to install if the lockfile is out of sync with the manifest.&rdquo; pnpm detects CI with the same rules as the <code>ci-info</code> package, and the docs say to set <code>CI=false</code> to turn detection off. GitHub Actions sets <code>CI=true</code> on its runners, so a bare <code>pnpm install</code> there is already frozen.</p>
+        <h2>The exact error</h2>
+        <p>With <code>CI=true</code> and a stale lockfile, pnpm 12.21.0 exited 1 and printed:</p>
+        <pre><code>Error: ERR_PNPM_OUTDATED_LOCKFILE
+
+  × installing dependencies
+  ╰─▶ Cannot install with "frozen-lockfile" because pnpm-lock.yaml is not up
+      to date with package.json.
+      
+        Failure reason:
+        specifiers in the lockfile don't match specifiers in package.json:
+      * in importers["."]:
+      * 1 dependency was added: left-pad@^1.3.0
+  help: Regenerate the lockfile with `pnpm install --lockfile-only` so that
+        pnpm-lock.yaml reflects the current package.json, then re-run `pnpm
+        install --frozen-lockfile`.</code></pre>
+        <p>pnpm 10.34.9 printed the older single-line form most CI logs still show, and also exited 1:</p>
+        <pre><code> ERR_PNPM_OUTDATED_LOCKFILE  Cannot install with "frozen-lockfile" because pnpm-lock.yaml is not up to date with &lt;ROOT&gt;/package.json
+
+Note that in CI environments this setting is true by default. If you still need to run install in such cases, use "pnpm install --no-frozen-lockfile"
+
+  Failure reason:
+  specifiers in the lockfile don't match specifiers in package.json:
+* 1 dependencies were added: left-pad@^1.3.0</code></pre>
+        <p>pnpm 9.15.9 printed the same first line and note, with the failure reason written as <code>specifiers in the lockfile ({"is-number":"^7.0.0"}) don't match specs in package.json ({"is-number":"^7.0.0","left-pad":"^1.3.0"})</code>. In every failing run the lockfile on disk was left unchanged.</p>
+        <p>The fix is on the developer machine, not in CI: run <code>pnpm install</code> (or <code>pnpm install --lockfile-only</code>, which the docs describe as updating only <code>pnpm-lock.yaml</code> and <code>package.json</code>), commit <code>pnpm-lock.yaml</code>, and push.</p>
+        <h2>With and without CI=true</h2>
+        <p>Same stale lockfile, pnpm 12.21.0, each run starting from the committed lockfile:</p>
+        <ul>
+          <li><code>CI=true pnpm install</code>: failed with <code>ERR_PNPM_OUTDATED_LOCKFILE</code>, exit 1.</li>
+          <li><code>CI=true pnpm install --frozen-lockfile</code>: same failure, exit 1.</li>
+          <li><code>pnpm install</code> with <code>CI</code> unset: resolved <code>left-pad 1.3.0</code>, rewrote <code>pnpm-lock.yaml</code>, exit 0.</li>
+          <li><code>pnpm install --frozen-lockfile</code> with <code>CI</code> unset: failed with <code>ERR_PNPM_OUTDATED_LOCKFILE</code>, exit 1.</li>
+          <li><code>GITHUB_ACTIONS=true pnpm install</code> with <code>CI</code> unset: exit 1, so detection is not only the <code>CI</code> variable.</li>
+        </ul>
+        <p>pnpm 10.34.9 and 9.15.9 behaved the same way: fail with <code>CI=true</code>, rewrite and exit 0 without it. The takeaway is to write <code>--frozen-lockfile</code> explicitly. A <code>docker build</code>, a self-hosted runner script, or a &ldquo;reproduce CI locally&rdquo; command may not look like CI to pnpm, and then a bare <code>pnpm install</code> quietly updates the lockfile and passes.</p>
+        <h2>--no-frozen-lockfile</h2>
+        <p><code>--no-frozen-lockfile</code> is the documented inverse and lets pnpm update the lockfile during the install. <code>CI=true pnpm install --no-frozen-lockfile</code> on pnpm 12.21.0 rewrote <code>pnpm-lock.yaml</code> and exited 0. It makes the red build go away, but CI then installs a tree that nobody reviewed or committed, and the next run may resolve differently. Use it for a deliberate lockfile-update job, not to silence the error.</p>
+        <h2>Pin the pnpm version: packageManager and Corepack</h2>
+        <p>The error text, lockfile format, and defaults change between pnpm majors, so pin the version. The <code>packageManager</code> field in <code>package.json</code> names the manager and exact version:</p>
+        <pre><code>{
+  "packageManager": "pnpm@12.21.0"
+}</code></pre>
+        <p>With Corepack, <code>pnpm</code> then runs that version. Corepack 0.36.0 on Node.js 24.22.1 read this field, downloaded pnpm 12.21.0, and reproduced the same <code>ERR_PNPM_OUTDATED_LOCKFILE</code> failure. Per the <a href="https://github.com/nodejs/node/blob/main/doc/contributing/distribution.md">Node.js distribution policy</a>, Corepack is no longer distributed as of Node.js 25.0.0; on Node 25+ install it with <code>npm install -g corepack</code> first, or install pnpm another way.</p>
+        <h2>GitHub Actions: pnpm/action-setup</h2>
+        <p><a href="https://github.com/pnpm/action-setup">pnpm/action-setup</a> (latest release v6.1.1) installs pnpm on the runner. Its README says the <code>version</code> input can be omitted when <code>package.json</code> declares pnpm in <code>packageManager</code>; otherwise it is required. The README also points pnpm 11+ users to <code>pnpm/setup</code> as an alternative that can install Node.js in the same step.</p>
+        <pre><code>steps:
+  - uses: actions/checkout@v6
+  - uses: pnpm/action-setup@v6   # reads packageManager from package.json
+  - uses: actions/setup-node@v4
+    with:
+      node-version: 24
+  - run: pnpm install --frozen-lockfile</code></pre>
+        <p>The explicit flag is redundant on a GitHub-hosted runner today, but it documents intent and keeps the step frozen if the script is reused somewhere that is not detected as CI.</p>
+        <h2>Dockerfile: copy pnpm-lock.yaml (and pnpm-workspace.yaml) before the install</h2>
+        <p>The lockfile has to be in the build context when the install runs:</p>
+        <pre><code># Node 24 or earlier base image, packageManager set in package.json
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY . .</code></pre>
+        <p>In a workspace, copy <code>pnpm-workspace.yaml</code> and every workspace <code>package.json</code> before the install as well. We tested what happens if you forget it: a workspace whose only dependency was in <code>packages/a</code>, built with root <code>package.json</code>, <code>pnpm-lock.yaml</code>, and <code>packages/a/package.json</code> but no <code>pnpm-workspace.yaml</code>. <code>CI=true pnpm install --frozen-lockfile</code> on pnpm 12.21.0 printed <code>Already up to date</code>, exited 0, and installed nothing into <code>packages/a</code>. Adding <code>pnpm-workspace.yaml</code> installed <code>is-number</code> there. No error, just a broken image.</p>
+        <h2>The .dockerignore trap</h2>
+        <p>If <code>.dockerignore</code> lists <code>pnpm-lock.yaml</code>, the <code>COPY</code> above fails on a missing source, and a <code>COPY . .</code> silently leaves the lockfile out. What pnpm does next depends on the flag. With no lockfile present, pnpm 12.21.0 gave:</p>
+        <ul>
+          <li><code>CI=true pnpm install --frozen-lockfile</code>: exit 1 with <code>Error: ERR_PNPM_NO_LOCKFILE</code> and &ldquo;Headless installation requires a pnpm-lock.yaml file, but none was found.&rdquo;</li>
+          <li><code>CI=true pnpm install</code> (no flag): resolved from scratch, wrote a new <code>pnpm-lock.yaml</code>, exit 0. The CI default only applies &ldquo;if a lockfile is present.&rdquo;</li>
+        </ul>
+        <p>So the explicit flag is what turns a missing lockfile into a failed build instead of an image built from whatever the registry served that day.</p>
+        <h2>How LockGate catches this</h2>
+        <p>These are the pnpm-related checks in the current LockGate code, confirmed against its source and test suite on 15 November 2026, and run against the stale-lockfile project above:</p>
+        <ul>
+          <li><strong>Implicit CI freeze (warning).</strong> A GitHub Actions <code>run:</code> step with <code>pnpm install</code> or <code>pnpm i</code> and no <code>--frozen-lockfile</code> is a warning, not an error, because pnpm already freezes on CI. The message asks you to make the flag explicit. <code>pnpm add</code> and other commands are not install steps and are skipped.</li>
+          <li><strong>packageManager mismatch (error).</strong> <code>package.json</code> sets <code>packageManager</code> to <code>pnpm@&hellip;</code> but the lockfile in scope belongs to another manager, such as <code>package-lock.json</code>.</li>
+          <li><strong>Mixed lockfiles (error).</strong> <code>pnpm-lock.yaml</code> next to <code>package-lock.json</code>, <code>yarn.lock</code>, or a bun lockfile in the same directory.</li>
+          <li><strong>Missing lockfile (error).</strong> A <code>package.json</code> with dependencies and no lockfile in its directory or above.</li>
+          <li><strong>Manifest vs <code>pnpm-lock.yaml</code> (error, full CLI only).</strong> For lockfile v6 and v9, including workspace importers: a direct dependency missing from the importer, an importer specifier that differs from <code>package.json</code>, a locked version outside the range, or a dependency the importer still records after it was removed. On the test project it reported <code>package.json declares left-pad@^1.3.0, but pnpm-lock.yaml has no entry for it.</code> without running an install.</li>
+          <li><strong>Dockerfile checks (full CLI only).</strong> A <code>RUN pnpm install</code> without <code>--frozen-lockfile</code> (warning), a pnpm install before any <code>COPY</code> of <code>pnpm-lock.yaml</code> (error), and <code>pnpm-lock.yaml</code> listed in <code>.dockerignore</code> (error).</li>
+        </ul>
+        <p>Limits, stated plainly: LockGate does not run pnpm or check which pnpm version is pinned; its <code>packageManager</code> check compares the manager name only. It treats any flag beginning with <code>--frozen-lockfile</code> as frozen, so <code>--frozen-lockfile=false</code> is not flagged, and <code>pnpm install --no-frozen-lockfile</code> in a workflow only gets the implicit-CI-freeze warning even though it disables the freeze. It does not check that a Dockerfile copies <code>pnpm-workspace.yaml</code> or workspace manifests, it skips commands written as <code>pnpm --filter &hellip; install</code>, and lockfile versions other than v6 and v9 get a warning instead of a sync check.</p>
+        <p>The free <a href="https://github.com/ESS2292/lockgate-action">LockGate Lite Action</a> includes the implicit CI freeze, <code>packageManager</code> mismatch, and mixed or missing lockfile checks. It passed the stale-lockfile project above with only warnings, because the manifest-vs-<code>pnpm-lock.yaml</code> comparison and Dockerfile checks are in the full CLI. Checkout is not live.</p>
+      </section>
+      <section class="cta-box" aria-label="LockGate">
+        <h2>Want the check in CI?</h2>
+        <p>The free <a href="https://github.com/ESS2292/lockgate-action">LockGate Lite GitHub Action</a> checks mixed or missing lockfiles and unfrozen CI installs. The full <strong>LockGate CLI</strong> also compares manifests to npm, Yarn, pnpm, and bun lockfiles and reads Dockerfiles, with a JSON report, locally or in any CI. Checkout is not live.</p>
+        <p><strong>$19 one-time</strong> &middot; Node 18+ &middot; zero runtime dependencies &middot; MIT source included. Checkout is not live.</p>
+        <p><a class="cta-link" href="../index.html#pricing">See LockGate &rarr;</a></p>
+      </section>
+      <section>
+        <h2>Related guides</h2>
+        <ul>
+          <li><a href="npm-ci-lockfile-out-of-sync.html">Why npm ci fails when the lockfile is out of sync</a></li>
+          <li><a href="docker-copy-package-lock-npm-ci.html">Copy the lockfile and run npm ci in Docker</a></li>
+          <li><a href="pnpm-lock-and-package-lock-both-committed.html">Don't commit pnpm-lock.yaml and package-lock.json together</a></li>
+          <li><a href="yarn-frozen-lockfile-immutable-ci.html">yarn install --frozen-lockfile vs yarn --immutable in CI</a></li>
+        </ul>
+      </section>
+    </main>
+    <footer>
+      <nav class="family-nav" aria-label="Other tools in this family">
+        <span class="family-label">Also:</span>
+          <a href="https://ess2292.github.io/envgate/">EnvGate</a>
+          <a href="https://ess2292.github.io/runtimegate/">RuntimeGate</a>
+          <a href="https://ess2292.github.io/lockgate/" aria-current="page">LockGate</a>
+          <a href="https://ess2292.github.io/servicegate/">ServiceGate</a>
+      </nav>
+<div class="footer-row">
+        <div>LockGate 0.2.1 by Emilio Straubel · pre-launch pages, not indexed</div>
+        <div class="footer-links">
+          <a href="../index.html">Home</a>
+          <a href="index.html" aria-current="page">Guides</a>
+          <a href="../privacy.html">Privacy</a>
+          <a href="../terms.html">Terms</a>
+          <a href="https://github.com/ESS2292/lockgate-action">Lite Action</a>
+          <a href="https://github.com/ESS2292/lockgate-action/issues">Issues</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
