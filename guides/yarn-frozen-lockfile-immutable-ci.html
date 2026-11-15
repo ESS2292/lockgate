@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>yarn install --frozen-lockfile vs yarn --immutable in CI — LockGate Guides</title>
+  <meta name="description" content="Which Yarn flag freezes the lockfile on Yarn 1 and on Yarn Berry, what each prints when yarn.lock is stale, why Yarn 1 silently ignores --immutable, and how to order COPY and Corepack in a Dockerfile." />
+  <meta name="author" content="Emilio Straubel" />
+  <meta name="robots" content="noindex" />
+  <meta property="og:title" content="yarn install --frozen-lockfile vs yarn --immutable in CI — LockGate Guides" />
+  <meta property="og:description" content="Which Yarn flag freezes the lockfile on Yarn 1 and on Yarn Berry, what each prints when yarn.lock is stale, why Yarn 1 silently ignores --immutable, and how to order COPY and Corepack in a Dockerfile." />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="LockGate" />
+  <meta property="og:url" content="https://ess2292.github.io/lockgate/guides/yarn-frozen-lockfile-immutable-ci.html" />
+  <link rel="canonical" href="https://ess2292.github.io/lockgate/guides/yarn-frozen-lockfile-immutable-ci.html" />
+  <meta property="og:image" content="https://ess2292.github.io/lockgate/og-image.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="LockGate — fail CI when the lockfile and the install disagree" />
+  <meta property="article:published_time" content="2026-11-15" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="yarn install --frozen-lockfile vs yarn --immutable in CI — LockGate Guides" />
+  <meta name="twitter:description" content="Which Yarn flag freezes the lockfile on Yarn 1 and on Yarn Berry, what each prints when yarn.lock is stale, why Yarn 1 silently ignores --immutable, and how to order COPY and Corepack in a Dockerfile." />
+  <meta name="twitter:image" content="https://ess2292.github.io/lockgate/og-image.png" />
+  <meta name="twitter:image:alt" content="LockGate — fail CI when the lockfile and the install disagree" />
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "TechArticle", "headline": "yarn install --frozen-lockfile vs yarn --immutable in CI", "description": "Which Yarn flag freezes the lockfile on Yarn 1 and on Yarn Berry, what each prints when yarn.lock is stale, why Yarn 1 silently ignores --immutable, and how to order COPY and Corepack in a Dockerfile.", "author": {"@type": "Person", "name": "Emilio Straubel"}, "datePublished": "2026-11-15", "dateModified": "2026-11-15", "mainEntityOfPage": "https://ess2292.github.io/lockgate/guides/yarn-frozen-lockfile-immutable-ci.html", "publisher": {"@type": "Person", "name": "Emilio Straubel"}, "image": "https://ess2292.github.io/lockgate/og-image.png"}</script>
+  <meta name="theme-color" content="#0b1220" />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="../favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="wrap">
+    <nav class="site-nav" aria-label="Primary">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">lg</span>
+        LockGate
+      </a>
+      <ul class="nav-links">
+        <li><a href="../index.html#checks">What it checks</a></li>
+        <li><a href="../index.html#ci">CI</a></li>
+        <li><a href="../index.html#limits">Limits</a></li>
+        <li><a href="../index.html#pricing">Pricing</a></li>
+        <li><a href="index.html" aria-current="page">Guides</a></li>
+        <li><a href="../index.html#faq">FAQ</a></li>
+        <li><a href="https://github.com/ESS2292/lockgate-action">Lite Action</a></li>
+      </ul>
+    </nav>
+    <main id="main" class="article">
+      <p class="crumbs"><a href="../index.html">LockGate</a> / <a href="index.html">Guides</a></p>
+      <section>
+        <div class="eyebrow">Guide &middot; November 15, 2026</div>
+        <h1>yarn install --frozen-lockfile vs yarn --immutable in CI</h1>
+        <p class="lead">Yarn has two frozen-install flags because it has two lines of releases. Use the wrong one and CI either fails for the wrong reason or, on Yarn 1, quietly rewrites <code>yarn.lock</code> and passes.</p>
+        <p>Yarn 1 (&ldquo;classic&rdquo;) and Yarn 2+ (&ldquo;Berry&rdquo;, currently 4.x) both read a file called <code>yarn.lock</code>, but they spell &ldquo;do not touch the lockfile&rdquo; differently. Everything below was run on 15 November 2026 with Yarn 1.22.22 and Yarn 4.9.2 (through Corepack) against a <code>package.json</code> that had gained a dependency the lockfile did not record.</p>
+        <h2>Yarn 1 (classic): --frozen-lockfile</h2>
+        <p>The <a href="https://classic.yarnpkg.com/lang/en/docs/cli/install/">Yarn classic install docs</a> describe <code>--frozen-lockfile</code> as &ldquo;Don&rsquo;t generate a <code>yarn.lock</code> lockfile and fail if an update is needed,&rdquo; and recommend it for continuous integration. Running bare <code>yarn</code> is the same as <code>yarn install</code> and passes flags through, so <code>yarn --frozen-lockfile</code> works too.</p>
+        <pre><code>yarn install --frozen-lockfile</code></pre>
+        <p>With a stale lockfile, Yarn 1.22.22 exits 1 with:</p>
+        <pre><code>error Your lockfile needs to be updated, but yarn was run with `--frozen-lockfile`.</code></pre>
+        <p>Two traps on Yarn 1:</p>
+        <ul>
+          <li><strong>No CI default.</strong> With <code>CI=true</code> set and no flag, Yarn 1.22.22 resolved the new dependency, printed <code>success Saved lockfile.</code>, and exited 0. CI goes green on a tree nobody committed.</li>
+          <li><strong><code>--immutable</code> is silently ignored.</strong> <code>yarn install --immutable</code> on Yarn 1.22.22 also rewrote <code>yarn.lock</code> and exited 0. A workflow copied from a Berry project gives you no protection on a classic project.</li>
+        </ul>
+        <p><code>--pure-lockfile</code> is a different flag: it does not write <code>yarn.lock</code>, but it does not fail when an update is needed either. For a CI gate you want <code>--frozen-lockfile</code>.</p>
+        <h2>Yarn Berry (2+): --immutable</h2>
+        <p>The <a href="https://yarnpkg.com/cli/install">Yarn Berry install docs</a> say that with <code>--immutable</code> &ldquo;Yarn will abort with an error exit code if the lockfile was to be modified,&rdquo; and that the option defaults to true on CI. <code>--frozen-lockfile</code> is kept as a backward-compatible alias that &ldquo;will be removed in a later release.&rdquo;</p>
+        <pre><code>yarn install --immutable</code></pre>
+        <p>With a stale lockfile, Yarn 4.9.2 exits 1 with:</p>
+        <pre><code>YN0028: The lockfile would have been modified by this install, which is explicitly forbidden.</code></pre>
+        <p>Observed behavior on Yarn 4.9.2:</p>
+        <ul>
+          <li><code>yarn install --frozen-lockfile</code> printed <code>YN0050: The --frozen-lockfile option is deprecated; use --immutable and/or --immutable-cache instead</code> and then failed with the same YN0028 error. It works today, but it is on its way out.</li>
+          <li><code>CI=true yarn install</code> (no flag) also failed with YN0028, matching the documented CI default.</li>
+          <li>Plain <code>yarn install</code> without <code>CI</code> set rewrote the lockfile and exited 0.</li>
+        </ul>
+        <p>Because the CI default depends on Yarn detecting CI, write the flag anyway. A <code>docker build</code> step, a self-hosted runner script, or a local &ldquo;reproduce CI&rdquo; command may not look like CI to Yarn. For Zero-Installs projects the docs also show <code>--immutable --immutable-cache</code>, plus <code>--check-cache</code> if you accept pull requests from forks.</p>
+        <h2>Pin the Yarn version: packageManager and Corepack</h2>
+        <p>The flag you need depends on which Yarn actually runs, so pin it. The <code>packageManager</code> field in <code>package.json</code> tells Corepack which manager and version to use, for example:</p>
+        <pre><code>{
+  "packageManager": "yarn@4.9.2"
+}</code></pre>
+        <p>With Corepack enabled (<code>corepack enable</code>), <code>yarn</code> then runs that exact version. Corepack has shipped with Node.js since 14.19.0 and 16.9.0, through the 24.x line, as an experimental tool you opt into. Per the <a href="https://github.com/nodejs/node/blob/main/doc/contributing/distribution.md">Node.js distribution policy</a>, it is no longer distributed as of Node.js 25.0.0; on Node 25+ install it with <code>npm install -g corepack</code> first.</p>
+        <h2>Dockerfile: copy yarn.lock before the install</h2>
+        <p>A frozen flag only helps if the lockfile is in the build context at install time. This order fails the build on a stale lock instead of resolving a new tree:</p>
+        <pre><code># Yarn 1
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile
+COPY . .</code></pre>
+        <pre><code># Yarn Berry with Corepack (Node 24 or earlier base image)
+RUN corepack enable
+COPY package.json yarn.lock .yarnrc.yml ./
+RUN yarn install --immutable
+COPY . .</code></pre>
+        <p>Drop <code>.yarnrc.yml</code> from the <code>COPY</code> if the project has none, because <code>COPY</code> fails on a missing source. If your <code>.yarnrc.yml</code> sets <code>yarnPath</code>, also copy the <code>.yarn/releases</code> directory it points to before the install. If <code>yarn.lock</code> is not copied (for example only <code>COPY package.json ./</code>), Yarn has nothing to freeze against and resolves from scratch; check <code>.dockerignore</code> does not list <code>yarn.lock</code> either. Do not rely on Berry&rsquo;s CI default inside an image: name <code>--immutable</code> explicitly.</p>
+        <h2>How LockGate catches this</h2>
+        <p>These are the Yarn-related checks in the current LockGate code, confirmed against its source and test suite on 15 November 2026:</p>
+        <ul>
+          <li><strong>Unfrozen CI install (error).</strong> A GitHub Actions <code>run:</code> step with <code>yarn</code> or <code>yarn install</code> and neither <code>--frozen-lockfile</code> nor <code>--immutable</code>. <code>yarn add</code>, <code>yarn run</code>, and similar are not install steps and are skipped.</li>
+          <li><strong>Implicit CI freeze (warning).</strong> If the committed <code>yarn.lock</code> is a Berry lockfile (it has a <code>__metadata:</code> block), a bare <code>yarn install</code> in CI is a warning rather than an error, because Berry already freezes on CI. The warning asks you to make <code>--immutable</code> explicit.</li>
+          <li><strong>packageManager mismatch (error).</strong> <code>package.json</code> names one manager in <code>packageManager</code> (say <code>pnpm@9.12.0</code>) but the lockfile in scope is <code>yarn.lock</code>.</li>
+          <li><strong>Mixed lockfiles (error).</strong> <code>yarn.lock</code> next to <code>package-lock.json</code>, <code>pnpm-lock.yaml</code>, or a bun lockfile in the same directory.</li>
+          <li><strong>Manifest vs <code>yarn.lock</code> (error, full CLI only).</strong> A direct dependency in <code>package.json</code> that is missing from <code>yarn.lock</code>, whose locked version does not satisfy the range, or (Berry workspaces) whose specifier no longer matches. Covers Yarn classic and Berry lockfiles, including workspaces, without running an install.</li>
+          <li><strong>Dockerfile checks (full CLI only).</strong> A <code>RUN yarn install</code> without a frozen flag (a warning for Berry lockfiles, an error otherwise), a Yarn install before any <code>COPY</code> of <code>yarn.lock</code>, and a <code>yarn.lock</code> listed in <code>.dockerignore</code>.</li>
+        </ul>
+        <p>Limits, stated plainly: LockGate accepts either flag as frozen whatever Yarn version runs. It does not know that Yarn 1 ignores <code>--immutable</code>, and its <code>packageManager</code> check compares the manager name only, so <code>"yarn@4.9.2"</code> next to a classic <code>yarn.lock</code> is not flagged. It does not check <code>.yarnrc.yml</code>, <code>yarnPath</code>, or <code>.yarn/releases</code> in Docker builds.</p>
+        <p>The free <a href="https://github.com/ESS2292/lockgate-action">LockGate Lite Action</a> includes the unfrozen CI install, implicit CI freeze, <code>packageManager</code> mismatch, and mixed or missing lockfile checks. The manifest-vs-<code>yarn.lock</code> comparison and Dockerfile checks are in the full CLI. Checkout is not live.</p>
+      </section>
+      <section class="cta-box" aria-label="LockGate">
+        <h2>Want the check in CI?</h2>
+        <p>The free <a href="https://github.com/ESS2292/lockgate-action">LockGate Lite GitHub Action</a> checks mixed or missing lockfiles and unfrozen CI installs. The full <strong>LockGate CLI</strong> also compares manifests to npm, Yarn, pnpm, and bun lockfiles and reads Dockerfiles, with a JSON report, locally or in any CI. Checkout is not live.</p>
+        <p><strong>$19 one-time</strong> &middot; Node 18+ &middot; zero runtime dependencies &middot; MIT source included. Checkout is not live.</p>
+        <p><a class="cta-link" href="../index.html#pricing">See LockGate &rarr;</a></p>
+      </section>
+      <section>
+        <h2>Related guides</h2>
+        <ul>
+          <li><a href="npm-ci-lockfile-out-of-sync.html">Why npm ci fails when the lockfile is out of sync</a></li>
+          <li><a href="docker-copy-package-lock-npm-ci.html">Copy the lockfile and run npm ci in Docker</a></li>
+          <li><a href="pnpm-lock-and-package-lock-both-committed.html">Don't commit pnpm-lock.yaml and package-lock.json together</a></li>
+        </ul>
+      </section>
+    </main>
+    <footer>
+      <nav class="family-nav" aria-label="Other tools in this family">
+        <span class="family-label">Also:</span>
+          <a href="https://ess2292.github.io/envgate/">EnvGate</a>
+          <a href="https://ess2292.github.io/runtimegate/">RuntimeGate</a>
+          <a href="https://ess2292.github.io/lockgate/" aria-current="page">LockGate</a>
+          <a href="https://ess2292.github.io/servicegate/">ServiceGate</a>
+      </nav>
+<div class="footer-row">
+        <div>LockGate 0.2.1 by Emilio Straubel · pre-launch pages, not indexed</div>
+        <div class="footer-links">
+          <a href="../index.html">Home</a>
+          <a href="index.html" aria-current="page">Guides</a>
+          <a href="../privacy.html">Privacy</a>
+          <a href="../terms.html">Terms</a>
+          <a href="https://github.com/ESS2292/lockgate-action">Lite Action</a>
+          <a href="https://github.com/ESS2292/lockgate-action/issues">Issues</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

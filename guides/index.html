@@ -24,7 +24,7 @@
   <meta name="twitter:description" content="Practical guides on npm ci failing when the lockfile is out of sync, committing two package managers' lockfiles, and copying the lockfile into a Docker image." />
   <meta name="twitter:image" content="https://ess2292.github.io/lockgate/og-image.png" />
   <meta name="twitter:image:alt" content="LockGate — fail CI when the lockfile and the install disagree" />
-  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "TechArticle", "headline": "Frozen lockfile and install-path guides", "description": "Practical guides on npm ci failing when the lockfile is out of sync, committing two package managers' lockfiles, and copying the lockfile into a Docker image.", "author": {"@type": "Person", "name": "Emilio Straubel"}, "datePublished": "2026-11-10", "dateModified": "2026-11-10", "mainEntityOfPage": "https://ess2292.github.io/lockgate/guides/", "publisher": {"@type": "Person", "name": "Emilio Straubel"}, "image": "https://ess2292.github.io/lockgate/og-image.png"}</script>
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "TechArticle", "headline": "Frozen lockfile and install-path guides", "description": "Practical guides on npm ci failing when the lockfile is out of sync, committing two package managers' lockfiles, and copying the lockfile into a Docker image.", "author": {"@type": "Person", "name": "Emilio Straubel"}, "datePublished": "2026-11-10", "dateModified": "2026-11-15", "mainEntityOfPage": "https://ess2292.github.io/lockgate/guides/", "publisher": {"@type": "Person", "name": "Emilio Straubel"}, "image": "https://ess2292.github.io/lockgate/og-image.png"}</script>
   <meta name="theme-color" content="#0b1220" />
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="icon" href="../favicon-32.png" type="image/png" sizes="32x32" />
@@ -52,7 +52,7 @@
     <main id="main" class="article">
       <p class="crumbs"><a href="../index.html">LockGate</a> / <a href="index.html">Guides</a></p>
       <section>
-        <div class="eyebrow">Guides &middot; Updated November 10, 2026</div>
+        <div class="eyebrow">Guides &middot; Updated November 15, 2026</div>
         <h1>Frozen lockfile and install-path guides</h1>
         <p class="lead">How to keep the committed lockfile, the manifest, and the install command in agreement, in CI and in Docker.</p>
         <p>These guides are public but pre-launch, and should not be indexed. Facts about official docs, cited issues, and Stack Overflow statistics were checked on 10 November 2026.</p>
@@ -69,6 +69,10 @@
         <article class="guide-card">
           <h2><a href="docker-copy-package-lock-npm-ci.html">Copy the lockfile and run npm ci in Docker</a></h2>
           <p>Why COPY package.json followed by RUN npm install is not a frozen image build, and what the official Node.js Docker examples do instead.</p>
+        </article>
+        <article class="guide-card">
+          <h2><a href="yarn-frozen-lockfile-immutable-ci.html">yarn install --frozen-lockfile vs yarn --immutable in CI</a></h2>
+          <p>Which flag freezes yarn.lock on Yarn 1 and on Yarn Berry, the exact errors each prints, why Yarn 1 silently ignores --immutable, and Dockerfile COPY order with Corepack.</p>
         </article>
       </div>
       <section class="cta-box" aria-label="LockGate">
