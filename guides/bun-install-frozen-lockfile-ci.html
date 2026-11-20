@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>bun install --frozen-lockfile in CI: &ldquo;lockfile had changes, but lockfile is frozen&rdquo; — LockGate Guides</title>
+  <meta name="description" content="Why bun install fails in CI with &ldquo;lockfile had changes, but lockfile is frozen&rdquo;, why a bare bun install is not frozen even with CI=true, what --frozen-lockfile does with no lockfile, bun.lockb vs bun.lock, and Dockerfile COPY order." />
+  <meta name="author" content="Emilio Straubel" />
+  <meta name="robots" content="noindex" />
+  <meta property="og:title" content="bun install --frozen-lockfile in CI: &ldquo;lockfile had changes, but lockfile is frozen&rdquo; — LockGate Guides" />
+  <meta property="og:description" content="Why bun install fails in CI with &ldquo;lockfile had changes, but lockfile is frozen&rdquo;, why a bare bun install is not frozen even with CI=true, what --frozen-lockfile does with no lockfile, bun.lockb vs bun.lock, and Dockerfile COPY order." />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="LockGate" />
+  <meta property="og:url" content="https://ess2292.github.io/lockgate/guides/bun-install-frozen-lockfile-ci.html" />
+  <link rel="canonical" href="https://ess2292.github.io/lockgate/guides/bun-install-frozen-lockfile-ci.html" />
+  <meta property="og:image" content="https://ess2292.github.io/lockgate/og-image.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="LockGate — fail CI when the lockfile and the install disagree" />
+  <meta property="article:published_time" content="2026-11-20" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="bun install --frozen-lockfile in CI: &ldquo;lockfile had changes, but lockfile is frozen&rdquo; — LockGate Guides" />
+  <meta name="twitter:description" content="Why bun install fails in CI with &ldquo;lockfile had changes, but lockfile is frozen&rdquo;, why a bare bun install is not frozen even with CI=true, what --frozen-lockfile does with no lockfile, bun.lockb vs bun.lock, and Dockerfile COPY order." />
+  <meta name="twitter:image" content="https://ess2292.github.io/lockgate/og-image.png" />
+  <meta name="twitter:image:alt" content="LockGate — fail CI when the lockfile and the install disagree" />
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "TechArticle", "headline": "bun install --frozen-lockfile in CI: \"lockfile had changes, but lockfile is frozen\"", "description": "Why bun install fails in CI with \"lockfile had changes, but lockfile is frozen\", why a bare bun install is not frozen even with CI=true, what --frozen-lockfile does with no lockfile, bun.lockb vs bun.lock, and Dockerfile COPY order.", "author": {"@type": "Person", "name": "Emilio Straubel"}, "datePublished": "2026-11-20", "dateModified": "2026-11-20", "mainEntityOfPage": "https://ess2292.github.io/lockgate/guides/bun-install-frozen-lockfile-ci.html", "publisher": {"@type": "Person", "name": "Emilio Straubel"}, "image": "https://ess2292.github.io/lockgate/og-image.png"}</script>
+  <meta name="theme-color" content="#0b1220" />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="../favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="wrap">
+    <nav class="site-nav" aria-label="Primary">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">lg</span>
+        LockGate
+      </a>
+      <ul class="nav-links">
+        <li><a href="../index.html#checks">What it checks</a></li>
+        <li><a href="../index.html#ci">CI</a></li>
+        <li><a href="../index.html#limits">Limits</a></li>
+        <li><a href="../index.html#pricing">Pricing</a></li>
+        <li><a href="index.html" aria-current="page">Guides</a></li>
+        <li><a href="../index.html#faq">FAQ</a></li>
+        <li><a href="https://github.com/ESS2292/lockgate-action">Lite Action</a></li>
+      </ul>
+    </nav>
+    <main id="main" class="article">
+      <p class="crumbs"><a href="../index.html">LockGate</a> / <a href="index.html">Guides</a></p>
+      <section>
+        <div class="eyebrow">Guide &middot; November 20, 2026</div>
+        <h1>bun install --frozen-lockfile in CI: &ldquo;lockfile had changes, but lockfile is frozen&rdquo;</h1>
+        <p class="lead">Your CI job runs <code>bun install --frozen-lockfile</code> or <code>bun ci</code> and fails with <code>error: lockfile had changes, but lockfile is frozen</code>. That is Bun doing its job: <code>package.json</code> changed and <code>bun.lock</code> was not regenerated and committed. The harder problem is the opposite case, where the install is not frozen and nothing fails.</p>
+        <p>Everything below was run on 20 November 2026 with Bun 1.4.4 and 1.4.5 (1.4.5 is the current <code>latest</code> on npm), plus Bun 1.2.23 and 1.1.38 for comparison, on Linux. The test project had a committed <code>bun.lock</code> for <code>is-number@^7.0.0</code>, then gained <code>"left-pad": "^1.3.0"</code> in <code>package.json</code> without a lockfile update.</p>
+        <h2>The exact error</h2>
+        <p>With the stale lockfile, <code>bun install --frozen-lockfile</code> on Bun 1.4.5 exited 1 and printed:</p>
+        <pre><code>bun install v1.4.5 (a7733435c)
+warn: deprecated left-pad@1.3.0: use String.prototype.padStart()
+error: lockfile had changes, but lockfile is frozen
+note: dependencies in package.json changed since bun.lock was saved: left-pad was added
+note: try re-running without --frozen-lockfile and commit the updated lockfile</code></pre>
+        <p><code>bun ci</code> printed the same error and also exited 1. Bun 1.4.4 printed the same error and notes. In every failing run, <code>bun.lock</code> on disk was left unchanged.</p>
+        <p>The fix is on the developer machine, not in CI: run <code>bun install</code>, commit <code>bun.lock</code>, and push. The <a href="https://bun.com/docs/pm/cli/install">bun install docs</a> say the same: &ldquo;Run <code>bun install</code> and commit the updated <code>bun.lock</code> to fix it.&rdquo;</p>
+        <h2>Bun does not freeze on CI by default</h2>
+        <p>pnpm and Yarn Berry switch to a frozen install when they detect CI. Bun does not. The <a href="https://bun.com/docs/pm/cli/install">bun install docs</a> state: &ldquo;Bun does not enable <code>--frozen-lockfile</code> automatically in CI; pass the flag or use <code>bun ci</code>.&rdquo;</p>
+        <p>We confirmed it. With the same stale lockfile, <code>CI=true bun install</code> on Bun 1.4.4 printed <code>Saved lockfile</code>, installed <code>left-pad@1.3.0</code>, rewrote <code>bun.lock</code>, and exited 0. The CI job goes green while installing a tree that nobody committed. So the first fix is the command itself:</p>
+        <pre><code>steps:
+  - uses: actions/checkout@v6
+  - uses: oven-sh/setup-bun@v2
+  - run: bun ci          # same as bun install --frozen-lockfile</code></pre>
+        <p>The docs describe <code>bun ci</code> as &ldquo;equivalent to <code>bun install --frozen-lockfile</code>&rdquo; and add: &ldquo;To use <code>bun ci</code> or <code>bun install --frozen-lockfile</code>, you must commit <code>bun.lock</code> to version control.&rdquo; They also say <code>--production</code> implies <code>--frozen-lockfile</code>; on the stale project, <code>bun install --production</code> failed with the same error.</p>
+        <h2>--frozen-lockfile with no lockfile passes</h2>
+        <p>If <code>bun.lock</code> is not in the checkout (gitignored, never committed, or excluded from a Docker build context), the frozen flag does not catch it. In a directory with only <code>package.json</code>, Bun 1.4.4 ran <code>bun install --frozen-lockfile</code>, resolved <code>is-number@7.0.0</code> from the registry, wrote no lockfile, and exited 0. <code>bun ci</code> did the same. The docs confirm it: &ldquo;If there is no lockfile at all, <code>--frozen-lockfile</code> installs from <code>package.json</code> without writing one.&rdquo;</p>
+        <p>So a frozen flag is only as good as the lockfile that reaches the install. Check that <code>bun.lock</code> is committed and copied, not only that the flag is present.</p>
+        <h2>Pin the Bun version</h2>
+        <p>The lockfile format changes between Bun versions, and an older Bun in CI can fail on a lockfile that is perfectly in sync. In our runs, Bun 1.4.4 wrote <code>"lockfileVersion": 2</code>. Bun 1.2.23 could not read it, even with <code>package.json</code> unchanged:</p>
+        <pre><code>bun install v1.2.23 (cf136713)
+2 |   "lockfileVersion": 2,
+                         ^
+error: Unknown lockfile version
+    at bun.lock:2:22
+UnknownLockfileVersion: failed to parse lockfile: 'bun.lock'
+
+warn: Ignoring lockfile
+error: lockfile had changes, but lockfile is frozen</code></pre>
+        <p>That run exited 1. The other direction worked: Bun 1.4.5 accepted a <code>"lockfileVersion": 1</code> lockfile written by 1.2.23 under <code>--frozen-lockfile</code>, exited 0, and left it unchanged.</p>
+        <p>Older Bun can be worse than a failure. Bun 1.1.38 did not use the committed <code>bun.lock</code>: on the stale project, <code>bun install --frozen-lockfile</code> installed <code>left-pad@1.3.0</code>, wrote no lockfile, and exited 0.</p>
+        <p><a href="https://github.com/oven-sh/setup-bun">oven-sh/setup-bun</a> (latest release v2.2.0) reads the version from <code>package.json</code> when you do not pass one. Its README says it checks the <code>packageManager</code> field first, then <code>engines.bun</code>, then falls back to <code>latest</code>. It also accepts <code>bun-version</code> and <code>bun-version-file</code> (for example <code>.bun-version</code> or <code>.tool-versions</code>). Pin the version so local and CI write and read the same lockfile format:</p>
+        <pre><code>{
+  "packageManager": "bun@1.4.5"
+}</code></pre>
+        <h2>bun.lockb vs bun.lock</h2>
+        <p>Per the <a href="https://bun.com/docs/pm/lockfile">Bun lockfile docs</a>, &ldquo;Bun v1.2 changed the default lockfile format to the text-based <code>bun.lock</code>.&rdquo; Older projects may still commit the binary <code>bun.lockb</code>. Bun 1.4.5 still honors it: on a <code>bun.lockb</code> written by Bun 1.1.38, <code>--frozen-lockfile</code> installed and exited 0 when it was in sync, and failed with the same &ldquo;lockfile had changes&rdquo; error (naming <code>bun.lockb</code>) after <code>left-pad</code> was added to <code>package.json</code>.</p>
+        <p>The docs give the migration command: <code>bun install --save-text-lockfile --frozen-lockfile --lockfile-only</code>, then delete <code>bun.lockb</code>. On Bun 1.4.5 that wrote <code>bun.lock</code>, exited 0, and <code>bun.lockb</code> was already gone afterwards. <code>bun ci</code> on the result exited 0. A text lockfile is also reviewable in a pull request, which a binary one is not.</p>
+        <h2>Dockerfile: copy bun.lock before the install</h2>
+        <p>The lockfile has to be in the build context when the install runs, and the install should be frozen. Docker builds are not CI to Bun either way, since Bun never freezes by default:</p>
+        <pre><code>FROM oven/bun:1
+WORKDIR /app
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
+COPY . .</code></pre>
+        <p>If <code>COPY</code> only copies <code>package.json</code>, or <code>.dockerignore</code> lists <code>bun.lock</code>, the install inside the image runs without a lockfile, which is the case shown above where <code>--frozen-lockfile</code> resolved from the registry and exited 0. The image is then built from whatever the registry served that day.</p>
+        <h2>How LockGate catches this</h2>
+        <p>These are the Bun-related checks in the current LockGate code, confirmed against its source and its 85-test suite on 20 November 2026. We ran them on a sample repo with the stale <code>bun.lock</code>, a workflow step <code>run: bun install</code>, and a Dockerfile that copied only <code>package.json</code> before <code>RUN bun install</code>. The full CLI exited 1 with:</p>
+        <pre><code>LockGate checked 1 package.json file and 1 lockfile.
+
+Errors (4):
+  [lockfile-out-of-sync] package.json declares left-pad@^1.3.0, but bun.lock has no entry for it.
+  [unfrozen-ci] .github/workflows/ci.yml:8 runs `bun install`, which can update the lockfile or resolve a different tree. Use bun ci or bun install --frozen-lockfile.
+  [unfrozen-docker] Dockerfile runs `bun install`. Use bun install with a frozen-lockfile flag so the image installs the committed tree.
+  [docker-missing-lockfile] Dockerfile installs with bun but does not COPY a bun lockfile before the install.</code></pre>
+        <p>After regenerating <code>bun.lock</code>, switching the workflow to <code>bun ci</code>, and using the Dockerfile above, it printed <code>OK — lockfiles and install commands look frozen.</code> and exited 0. The checks:</p>
+        <ul>
+          <li><strong>Unfrozen CI install (error).</strong> A GitHub Actions <code>run:</code> step with <code>bun install</code> or <code>bun i</code> and no <code>--frozen-lockfile</code>. <code>bun ci</code> counts as frozen; <code>bun add</code> is skipped. Unlike pnpm, this is an error, not a warning, because Bun has no CI default.</li>
+          <li><strong>Missing lockfile (error).</strong> A <code>package.json</code> with dependencies and no lockfile in its directory or above. This is the case <code>--frozen-lockfile</code> lets through.</li>
+          <li><strong>Manifest vs <code>bun.lock</code> (error, full CLI only).</strong> Each direct dependency must have a matching entry in the text <code>bun.lock</code>, including workspaces, without running an install.</li>
+          <li><strong>Dockerfile checks (full CLI only).</strong> A <code>RUN bun install</code> without a frozen flag (error), a Bun install before any <code>COPY</code> of <code>bun.lock</code> or <code>bun.lockb</code> (error), and a lockfile listed in <code>.dockerignore</code> (error).</li>
+          <li><strong>packageManager mismatch (error).</strong> <code>"packageManager": "bun@1.4.5"</code> next to a <code>package-lock.json</code> reported <code>package.json sets packageManager to bun, but the lockfile in scope is for npm.</code></li>
+          <li><strong>Mixed lockfiles (error).</strong> <code>bun.lock</code> next to <code>package-lock.json</code>, <code>yarn.lock</code>, or <code>pnpm-lock.yaml</code> in the same directory.</li>
+        </ul>
+        <p>Limits, stated plainly: LockGate does not run Bun and does not check which Bun version is pinned, so it will not catch the lockfile-version failure above. It does not parse the binary <code>bun.lockb</code>; a repo with only <code>bun.lockb</code> got a warning (<code>bun.lockb is a binary bun lockfile. LockGate can check manifest sync on text bun.lock, not bun.lockb.</code>) and exited 0 even though that lockfile was stale. It treats any flag beginning with <code>--frozen-lockfile</code> as frozen, so <code>--frozen-lockfile=false</code> is not flagged, and it flags <code>bun install --production</code> as unfrozen even though Bun treats it as frozen. Workflow and Dockerfile parsing is best-effort.</p>
+        <p>The free <a href="https://github.com/ESS2292/lockgate-action">LockGate Lite Action</a> includes the unfrozen CI install, <code>packageManager</code> mismatch, and mixed or missing lockfile checks. On the sample repo above it reported only the <code>unfrozen-ci</code> error, because the manifest-vs-<code>bun.lock</code> comparison and Dockerfile checks are in the full CLI. Checkout is not live.</p>
+      </section>
+      <section class="cta-box" aria-label="LockGate">
+        <h2>Want the check in CI?</h2>
+        <p>The free <a href="https://github.com/ESS2292/lockgate-action">LockGate Lite GitHub Action</a> checks mixed or missing lockfiles and unfrozen CI installs. The full <strong>LockGate CLI</strong> also compares manifests to npm, Yarn, pnpm, and bun lockfiles and reads Dockerfiles, with a JSON report, locally or in any CI. Checkout is not live.</p>
+        <p><strong>$19 one-time</strong> &middot; Node 18+ &middot; zero runtime dependencies &middot; MIT source included. Checkout is not live.</p>
+        <p><a class="cta-link" href="../index.html#pricing">See LockGate &rarr;</a></p>
+      </section>
+      <section>
+        <h2>Related guides</h2>
+        <ul>
+          <li><a href="pnpm-frozen-lockfile-ci.html">pnpm install --frozen-lockfile in CI: ERR_PNPM_OUTDATED_LOCKFILE explained</a></li>
+          <li><a href="yarn-frozen-lockfile-immutable-ci.html">yarn install --frozen-lockfile vs yarn --immutable in CI</a></li>
+          <li><a href="npm-ci-lockfile-out-of-sync.html">Why npm ci fails when the lockfile is out of sync</a></li>
+          <li><a href="docker-copy-package-lock-npm-ci.html">Copy the lockfile and run npm ci in Docker</a></li>
+        </ul>
+      </section>
+    </main>
+    <footer>
+      <nav class="family-nav" aria-label="Other tools in this family">
+        <span class="family-label">Also:</span>
+          <a href="https://ess2292.github.io/envgate/">EnvGate</a>
+          <a href="https://ess2292.github.io/runtimegate/">RuntimeGate</a>
+          <a href="https://ess2292.github.io/lockgate/" aria-current="page">LockGate</a>
+          <a href="https://ess2292.github.io/servicegate/">ServiceGate</a>
+      </nav>
+<div class="footer-row">
+        <div>LockGate 0.2.1 by Emilio Straubel · pre-launch pages, not indexed</div>
+        <div class="footer-links">
+          <a href="../index.html">Home</a>
+          <a href="index.html" aria-current="page">Guides</a>
+          <a href="../privacy.html">Privacy</a>
+          <a href="../terms.html">Terms</a>
+          <a href="https://github.com/ESS2292/lockgate-action">Lite Action</a>
+          <a href="https://github.com/ESS2292/lockgate-action/issues">Issues</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

@@ -52,7 +52,7 @@
     <main id="main" class="article">
       <p class="crumbs"><a href="../index.html">LockGate</a> / <a href="index.html">Guides</a></p>
       <section>
-        <div class="eyebrow">Guides &middot; Updated November 15, 2026</div>
+        <div class="eyebrow">Guides &middot; Updated November 20, 2026</div>
         <h1>Frozen lockfile and install-path guides</h1>
         <p class="lead">How to keep the committed lockfile, the manifest, and the install command in agreement, in CI and in Docker.</p>
         <p>These guides are public but pre-launch, and should not be indexed. Facts about official docs, cited issues, and Stack Overflow statistics were checked on 10 November 2026.</p>
@@ -77,6 +77,10 @@
         <article class="guide-card">
           <h2><a href="pnpm-frozen-lockfile-ci.html">pnpm install --frozen-lockfile in CI: ERR_PNPM_OUTDATED_LOCKFILE explained</a></h2>
           <p>Why pnpm fails in CI when pnpm-lock.yaml is stale, the exact output from pnpm 12, 10, and 9, the CI default versus local installs, --no-frozen-lockfile, and Dockerfile COPY order for workspaces.</p>
+        </article>
+        <article class="guide-card">
+          <h2><a href="bun-install-frozen-lockfile-ci.html">bun install --frozen-lockfile in CI: &ldquo;lockfile had changes, but lockfile is frozen&rdquo;</a></h2>
+          <p>The exact Bun 1.4 error, why a bare bun install is not frozen even with CI=true, why --frozen-lockfile passes with no lockfile, pinning the Bun version, bun.lockb vs bun.lock, and Dockerfile COPY order.</p>
         </article>
       </div>
       <section class="cta-box" aria-label="LockGate">
